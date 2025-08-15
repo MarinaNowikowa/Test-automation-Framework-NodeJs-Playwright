@@ -7,9 +7,16 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout (full history)
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Push to Bitbucket
+
+      - name: Mirror all branches (no tags) to Bitbucket
+        env:
+          BB_URL: https://${{ secrets.BITBUCKET_USERNAME }}:${{ secrets.BITBUCKET_APP_PASSWORD }}@bitbucket.org/marinanovikova-test/test-automation-framework-nodejs-playwright.git
         run: |
-          git push --mirror https://${{ secrets.BITBUCKET_USERNAME }}:${{ secrets.BITBUCKET_APP_PASSWORD }}@bitbucket.org/marinanovikova-test/test-automation-framework-nodejs-playwright.git
+          set -euo pipefail
+          git --version
+          git fetch --prune origin '+refs/heads/*:refs/remotes/origin/*'
+          git push --prune "$BB_URL" '+refs/remotes/origin/*:refs/heads/*'
