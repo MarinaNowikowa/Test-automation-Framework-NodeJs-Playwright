@@ -12,33 +12,26 @@ pipelines:
         script:
           - npm ci
           - npx playwright install --with-deps
-          - set -o pipefail
+          - set -euo pipefail
           - npx playwright test 2>&1 | tee test-console.log
         artifacts:
           - test-console.log
           - allure-results/**
 
     - step:
-        name: Generate Allure report
-        script:
-          - npm i -g allure-commandline --no-audit --no-fund --no-update-notifier
-          - allure generate allure-results --clean -o allure-report
-        artifacts:
-          - allure-report/**
-
-    - step:
-        name: Publish Allure to Bitbucket Static Website
+        name: Generate & Publish Allure report
         deployment: production
         script:
-          - test -d allure-report || { echo "allure-report/ not found"; exit 1; }
-          - git config --global user.email "${WEBSITE_GIT_EMAIL:-ci@bitbucket.org}"
-          - git config --global user.name  "${WEBSITE_GIT_NAME:-Bitbucket CI}"
+          - set -euo pipefail
+          - test -d allure-results || { echo "allure-results/ not found"; exit 1; }
+          - npm i -g allure-commandline --no-audit --no-fund --no-update-notifier
+          - allure generate allure-results --clean -o allure-report
           - tmpdir="$(mktemp -d)"
           - cp -r allure-report/* "$tmpdir"/
           - cd "$tmpdir"
           - git init
           - git add .
-          - git commit -m "Allure for ${BITBUCKET_REPO_FULL_NAME}@${BITBUCKET_COMMIT}"
+          - git -c user.name="Bitbucket CI" -c user.email="ci@bitbucket.org" commit -m "Allure for ${BITBUCKET_REPO_FULL_NAME}@${BITBUCKET_COMMIT}"
           - git branch -M main
           - git remote add origin "https://${WEBSITE_USER}:${WEBSITE_APP_PASSWORD}@bitbucket.org/${WEBSITE_REPO}.git"
           - git push -f origin main
