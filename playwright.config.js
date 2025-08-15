@@ -15,7 +15,8 @@ module.exports = defineConfig({
         'Framework': 'Playwright + Node.js',
         'Test_Type': 'API Testing'
       }
-    }]
+    }],
+    ...(process.env.CI ? [['junit', { outputFile: 'test-results/junit.xml' }]] : [])
   ],
   use: {
     baseURL: 'https://jsonplaceholder.typicode.com',

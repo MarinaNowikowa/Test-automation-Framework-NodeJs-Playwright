@@ -1,55 +1,43 @@
-image: mcr.microsoft.com/playwright:v1.54.0-noble
+image: mcr.microsoft.com/playwright:v1.45.0-jammy
 
 options:
-  max-time: 15
+  max-time: 30
 
-definitions:
-  steps:
-    - step: &install-and-test
-        name: Install deps & run tests
+pipelines:
+  default:
+    - step:
+        name: Test (Playwright)
         caches:
           - node
         script:
           - npm ci
-          - npx playwright install
-          - npm test
+          - npx playwright install --with-deps
+          - set -o pipefail
+          - npx playwright test 2>&1 | tee test-console.log
         artifacts:
+          - test-console.log
           - allure-results/**
 
-    - step: &generate-allure
+    - step:
         name: Generate Allure report
-        image: tobix/allure-cli:2.24.1 
         script:
+          - npm i -g allure-commandline --no-audit --no-fund --no-update-notifier
           - allure generate allure-results --clean -o allure-report
         artifacts:
           - allure-report/**
 
-pipelines:
-  default:
-    - step: *install-and-test
-
-  branches:
-    main:
-      - step: *install-and-test
-      - step: *generate-allure
-    develop:
-      - step: *install-and-test
-      - step: *generate-allure
-
-  pull-requests:
-    "**":
-      - step: *install-and-test
-
-  custom:
-    smoke-tests:
-      - step:
-          name: Run smoke subset
-          caches:
-            - node
-          script:
-            - npm ci
-            - npx playwright install
-            - npm run test
-          artifacts:
-            - allure-results/**
-      - step: *generate-allure
+    - step:
+        name: Publish Allure to Bitbucket Static Website
+        deployment: production
+        script:
+          - git config --global user.email "${WEBSITE_GIT_EMAIL:-ci@bitbucket.org}"
+          - git config --global user.name  "${WEBSITE_GIT_NAME:-Bitbucket CI}"
+          - mkdir pub && cp -r allure-report/* pub/
+          - cd pub
+          - git init
+          - git add .
+          - git commit -m "Allure for ${BITBUCKET_REPO_FULL_NAME}@${BITBUCKET_COMMIT}"
+          - git branch -M main
+          - git remote add origin "https://${WEBSITE_USER}:${WEBSITE_APP_PASSWORD}@bitbucket.org/${WEBSITE_REPO}.git"
+          - git push -f origin main
+          - echo "Published: https://${WEBSITE_REPO}/"
