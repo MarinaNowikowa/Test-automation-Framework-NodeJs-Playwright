@@ -1,39 +1,88 @@
 image: mcr.microsoft.com/playwright:v1.45.0-jammy
 
+options:
+  max-time: 30
+
 pipelines:
   default:
     - step:
-        name: Test + always publish Allure
-        caches: [node]
+        name: Tests + Allure (always publish)
+        deployment: production
+        caches:
+          - node
         script:
           - |
             set -euo pipefail
             npm ci
             npx playwright install --with-deps
-            # прогон тестов (код выхода может быть != 0 — шаг пометится failed)
             npx playwright test 2>&1 | tee test-console.log
         after-script:
           - |
             set +e
             echo "Generating & publishing Allure report (always)…"
-            if [ -d allure-results ]; then
-              npm i -g allure-commandline --no-audit --no-fund --no-update-notifier
-              allure generate allure-results --clean -o allure-report || true
-              tmpdir="$(mktemp -d)"
-              cp -r allure-report/* "$tmpdir"/
-              cd "$tmpdir"
-              git init
-              git add .
-              GIT_AUTHOR_NAME="Bitbucket CI" GIT_AUTHOR_EMAIL="ci@bitbucket.org" \
-              GIT_COMMITTER_NAME="Bitbucket CI" GIT_COMMITTER_EMAIL="ci@bitbucket.org" \
-              git commit -m "Allure for ${BITBUCKET_REPO_FULL_NAME}@${BITBUCKET_COMMIT}"
-              git branch -M main
-              git remote add origin "https://${WEBSITE_USER}:${WEBSITE_APP_PASSWORD}@bitbucket.org/${WEBSITE_REPO}.git"
-              git push -f origin main || true
-              echo "Published: https://${WEBSITE_REPO}/"
-            else
+
+            if [ ! -d allure-results ]; then
               echo "No allure-results found; nothing to publish."
+              exit 0
             fi
+
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update -y
+            apt-get install -y --no-install-recommends openjdk-17-jre-headless
+            rm -rf /var/lib/apt/lists/*
+
+            npm i -g allure-commandline --no-audit --no-fund --no-update-notifier
+            allure generate allure-results --clean -o allure-report || true
+            if [ ! -d allure-report ]; then
+              echo "Allure report was not generated."
+              exit 0
+            fi
+
+            : "${WEBSITE_USER:?Set Repository variable WEBSITE_USER (Bitbucket username)}"
+            : "${WEBSITE_APP_PASSWORD:?Set Repository variable WEBSITE_APP_PASSWORD (App password)}"
+            : "${WEBSITE_REPO:?Set Repository variable WEBSITE_REPO (e.g. workspace/workspace.bitbucket.io)}"
+
+            SITE_NAME="${WEBSITE_REPO#*/}"                # "<workspace>.bitbucket.io"
+            SITE_URL="https://${SITE_NAME}/"
+
+            tmpdir="$(mktemp -d)"
+            cp -r allure-report/* "$tmpdir"/
+            cd "$tmpdir"
+            git init
+            git add .
+            git -c user.name="Bitbucket CI" -c user.email="ci@bitbucket.org" commit -m "Allure for ${BITBUCKET_REPO_FULL_NAME}@${BITBUCKET_COMMIT}"
+            git branch -M main
+            git remote add origin "https://${WEBSITE_USER}:${WEBSITE_APP_PASSWORD}@bitbucket.org/${WEBSITE_REPO}.git"
+            git push -f origin main || true
+            echo "Published: ${SITE_URL}"
+
+            REPORT_ID="allure-${BITBUCKET_BUILD_NUMBER}"
+            RESULT="PASSED"
+            [ -d allure-report ] || RESULT="FAILED"
+            cat > payload.json <<EOF
+            {
+              "title": "Allure Report",
+              "details": "HTML report published by Pipelines",
+              "report_type": "TEST",
+              "reporter": "pipelines",
+              "link": "${SITE_URL}",
+              "result": "${RESULT}",
+              "data": [
+                {
+                  "title": "Open Allure",
+                  "type": "LINK",
+                  "value": { "text": "View report", "href": "${SITE_URL}" }
+                }
+              ]
+            }
+            EOF
+            curl --fail --silent --show-error \
+              --request PUT \
+              --url "https://api.bitbucket.org/2.0/repositories/${BITBUCKET_WORKSPACE}/${BITBUCKET_REPO_SLUG}/commit/${BITBUCKET_COMMIT}/reports/${REPORT_ID}" \
+              -u "${WEBSITE_USER}:${WEBSITE_APP_PASSWORD}" \
+              -H 'Content-Type: application/json' \
+              --data-binary @payload.json || true
+
         artifacts:
           - test-console.log
           - allure-results/**
