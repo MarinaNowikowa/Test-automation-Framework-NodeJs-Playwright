@@ -12,5 +12,4 @@ jobs:
           fetch-depth: 0
       - name: Push to Bitbucket
         run: |
-          git remote add bitbucket https://${{ secrets.BITBUCKET_USERNAME }}:${{ secrets.BITBUCKET_APP_PASSWORD }}@bitbucket.org/marinanovikova-test/test-automation-framework-nodejs-playwright.git
-          git push --mirror bitbucket
+          git push --mirror https://${{ secrets.BITBUCKET_USERNAME }}:${{ secrets.BITBUCKET_APP_PASSWORD }}@bitbucket.org/marinanovikova-test/test-automation-framework-nodejs-playwright.git
