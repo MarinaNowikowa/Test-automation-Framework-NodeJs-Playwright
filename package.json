@@ -1,0 +1,20 @@
+{
+  "name": "jsonplaceholder-api-tests",
+  "version": "1.0.0",
+  "description": "API automation framework for JSONPlaceholder using Node.js and Playwright",
+  "main": "index.js",
+  "scripts": {
+    "test": "playwright test",
+    "report:generate": "allure generate allure-results --clean -o allure-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.54.0",
+    "allure-playwright": "^2.9.2",
+    "allure-commandline": "^2.24.1"
+  },
+  "dependencies": {
+    "ajv": "^8.12.0",
+    "ajv-formats": "^2.1.1",
+    "@faker-js/faker": "^8.3.1"
+  }
+}

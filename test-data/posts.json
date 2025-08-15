@@ -1,0 +1,65 @@
+{
+  "validPosts": [
+    {
+      "title": "Test Post 1 - Valid Data",
+      "body": "This is a test post with valid data for automated testing purposes.",
+      "userId": 1
+    },
+    {
+      "title": "Test Post 2 - Different User",
+      "body": "Another test post with different user ID to verify data handling.",
+      "userId": 2
+    },
+    {
+      "title": "Test Post 3 - Long Content",
+      "body": "This is a test post with longer content to verify that the API can handle posts with substantial text content. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.",
+      "userId": 3
+    }
+  ],
+  "invalidPosts": [
+    {
+      "description": "Missing required fields",
+      "data": {
+        "title": "Incomplete Post"
+      }
+    },
+    {
+      "description": "Invalid data types",
+      "data": {
+        "title": 123,
+        "body": true,
+        "userId": "invalid"
+      }
+    },
+    {
+      "description": "Empty strings",
+      "data": {
+        "title": "",
+        "body": "",
+        "userId": 1
+      }
+    },
+    {
+      "description": "Null values",
+      "data": {
+        "title": null,
+        "body": null,
+        "userId": null
+      }
+    }
+  ],
+  "updateData": [
+    {
+      "id": 1,
+      "title": "Updated Post Title",
+      "body": "This post has been updated through automation testing.",
+      "userId": 1
+    },
+    {
+      "id": 2,
+      "title": "Another Updated Post",
+      "body": "This is another example of an updated post for testing purposes.",
+      "userId": 2
+    }
+  ]
+}

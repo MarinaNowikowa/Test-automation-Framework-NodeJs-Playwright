@@ -1,0 +1,73 @@
+{
+  "validUsers": [
+    {
+      "name": "Test User 1",
+      "username": "testuser1",
+      "email": "testuser1@example.com",
+      "address": {
+        "street": "123 Test Street",
+        "suite": "Apt. 1",
+        "city": "Test City",
+        "zipcode": "12345-1234",
+        "geo": {
+          "lat": "40.7128",
+          "lng": "-74.0060"
+        }
+      },
+      "phone": "1-555-123-4567",
+      "website": "testuser1.example.com",
+      "company": {
+        "name": "Test Company 1",
+        "catchPhrase": "Testing is our passion",
+        "bs": "quality assurance solutions"
+      }
+    },
+    {
+      "name": "Test User 2",
+      "username": "testuser2",
+      "email": "testuser2@example.com",
+      "address": {
+        "street": "456 Test Avenue",
+        "suite": "Suite 2B",
+        "city": "Another Test City",
+        "zipcode": "67890-5678",
+        "geo": {
+          "lat": "34.0522",
+          "lng": "-118.2437"
+        }
+      },
+      "phone": "1-555-987-6543",
+      "website": "testuser2.example.com",
+      "company": {
+        "name": "Test Company 2",
+        "catchPhrase": "Innovation through testing",
+        "bs": "automated testing frameworks"
+      }
+    }
+  ],
+  "invalidUsers": [
+    {
+      "description": "Missing required email",
+      "data": {
+        "name": "Invalid User",
+        "username": "invaliduser"
+      }
+    },
+    {
+      "description": "Invalid email format",
+      "data": {
+        "name": "Invalid Email User",
+        "username": "invalidemail",
+        "email": "not-an-email"
+      }
+    },
+    {
+      "description": "Empty required fields",
+      "data": {
+        "name": "",
+        "username": "",
+        "email": ""
+      }
+    }
+  ]
+}

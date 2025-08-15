@@ -1,0 +1,10 @@
+# Node.js
+node_modules/
+
+# Test results
+test-results/
+allure-results/
+allure-report/
+
+# IDE files
+.idea/
