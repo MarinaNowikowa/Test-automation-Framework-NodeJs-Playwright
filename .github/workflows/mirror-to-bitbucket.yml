@@ -14,9 +14,12 @@ jobs:
 
       - name: Mirror all branches (no tags) to Bitbucket
         env:
-          BB_URL: https://${{ secrets.BITBUCKET_USERNAME }}:${{ secrets.BITBUCKET_APP_PASSWORD }}@bitbucket.org/marinanovikova-test/test-automation-framework-nodejs-playwright.git
+          BB_USER: ${{ secrets.BITBUCKET_USERNAME }}
+          BB_APP_PW: ${{ secrets.BITBUCKET_APP_PASSWORD }}
         run: |
           set -euo pipefail
-          git --version
           git fetch --prune origin '+refs/heads/*:refs/remotes/origin/*'
-          git push --prune "$BB_URL" '+refs/remotes/origin/*:refs/heads/*'
+          AUTH="$(printf '%s:%s' "$BB_USER" "$BB_APP_PW" | base64)"
+          URL="https://bitbucket.org/${BB_WORKSPACE}/${BB_REPO}.git"
+          git -c http.extraheader="Authorization: Basic $AUTH" \
+          push --prune "$URL" '+refs/remotes/origin/*:refs/heads/*'
