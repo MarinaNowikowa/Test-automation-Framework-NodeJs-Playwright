@@ -30,10 +30,12 @@ pipelines:
         name: Publish Allure to Bitbucket Static Website
         deployment: production
         script:
+          - test -d allure-report || { echo "allure-report/ not found"; exit 1; }
           - git config --global user.email "${WEBSITE_GIT_EMAIL:-ci@bitbucket.org}"
           - git config --global user.name  "${WEBSITE_GIT_NAME:-Bitbucket CI}"
-          - mkdir pub && cp -r allure-report/* pub/
-          - cd pub
+          - tmpdir="$(mktemp -d)"
+          - cp -r allure-report/* "$tmpdir"/
+          - cd "$tmpdir"
           - git init
           - git add .
           - git commit -m "Allure for ${BITBUCKET_REPO_FULL_NAME}@${BITBUCKET_COMMIT}"
