@@ -1,20 +1,19 @@
-const { test, expect } = require('@playwright/test');
-const { allure } = require('allure-playwright');
-const ApiClient = require('../../utils/api-client');
-const SchemaValidator = require('../../utils/schema-validator');
-const TestHelpers = require('../../utils/test-helpers');
-const postsData = require('../../test-data/posts.json');
+import { test, expect } from '@playwright/test';
+import { allure } from 'allure-playwright';
+import ApiClient from '../../utils/api-client.js';
+import { PostModel } from '../../models/index.js';
+import HTTP_STATUS from '../../utils/http-status.js';
+import { AllureHelpers } from '../../utils/allure-helpers.js';
+import postsData from '../../test-data/posts.json'
 
 test.describe('Posts API Tests', () => {
   let apiClient;
-  let schemaValidator;
 
   test.beforeEach(async () => {
     await allure.suite('Posts API');
     
     apiClient = new ApiClient();
     await apiClient.init();
-    schemaValidator = new SchemaValidator();
   });
 
   test.afterEach(async () => {
@@ -22,65 +21,61 @@ test.describe('Posts API Tests', () => {
   });
 
   test.describe('GET /posts - Positive Scenarios', () => {
-    test('GET /posts — retrieve all', async () => {
-      const response = await apiClient.get('/posts');
-      const posts = await TestHelpers.validateResponse(
-        response, 
-        200, 
-        schemaValidator, 
-        { type: 'array', items: schemaValidator.getPostSchema() }
-      );
-
-      expect(posts).toHaveLength(100);
-      expect(posts[0]).toHaveProperty('id');
-      expect(posts[0]).toHaveProperty('userId');
-      expect(posts[0]).toHaveProperty('title');
-      expect(posts[0]).toHaveProperty('body');
-    });
-
-    test('GET /posts/{id} — retrieve by ID', async () => {
-      const postId = TestHelpers.getRandomId(1, 100);
-      const response = await apiClient.get(`/posts/${postId}`);
-      const post = await TestHelpers.validateResponse(
-        response, 
-        200, 
-        schemaValidator, 
-        schemaValidator.getPostSchema()
-      );
-
-      expect(post.id).toBe(postId);
-      expect(post.userId).toBeGreaterThan(0);
-      expect(post.title).toBeTruthy();
-      expect(post.body).toBeTruthy();
-    });
-
-    test('GET /posts?userId={userId} — retrieve posts by user ID', async () => {
-      const userId = TestHelpers.getRandomId(1, 10);
-      const response = await apiClient.get(`/posts?userId=${userId}`);
-      const posts = await TestHelpers.validateResponse(
-        response, 
-        200, 
-        schemaValidator, 
-        { type: 'array', items: schemaValidator.getPostSchema() }
-      );
-
-      posts.forEach(post => {
-        expect(post.userId).toBe(userId);
+        test('GET /posts — retrieve all', async () => {
+        const response = await apiClient.get('/posts');
+        expect(response.status()).toBe(HTTP_STATUS.OK);
+        
+        const posts = await response.json();
+        expect(posts).toHaveLength(100);
+        
+        for (const post of posts) {
+          const postModel = new PostModel(post);
+          const validation = postModel.validate();
+          await AllureHelpers.logModelValidationIfInvalid('PostModel', validation, post);
+          expect(validation.isValid).toBe(true);
+        }
       });
-    });
+
+        test('GET /posts/{id} — retrieve by ID', async () => {
+        const postId = PostModel.generateRandomPostId();
+        const response = await apiClient.get(`/posts/${postId}`);
+        const post = await response.json();
+        expect(response.status()).toBe(HTTP_STATUS.OK);
+        
+        const postModel = new PostModel(post);
+        const validation = postModel.validate();
+        await AllureHelpers.logModelValidationIfInvalid('PostModel', validation, post);
+        expect(validation.isValid).toBe(true);
+      });
+
+          test('GET /posts?userId={userId} — retrieve posts by user ID', async () => {
+        const postModel = PostModel.generate();
+        const userId = postModel.userId;
+        const response = await apiClient.get(`/posts?userId=${userId}`);
+        const posts = await response.json();
+        expect(response.status()).toBe(HTTP_STATUS.OK);
+
+        for (const post of posts) {
+          expect(post.userId).toBe(userId);
+          const postModel = new PostModel(post);
+          const validation = postModel.validate();
+          await AllureHelpers.logModelValidationIfInvalid('PostModel', validation, post);
+          expect(validation.isValid).toBe(true);
+        }
+      });
   });
 
   test.describe('GET /posts - Negative Scenarios', () => {
-    test('GET /posts/{id} — non-existent', async () => {
-      const invalidId = TestHelpers.getNonExistentId();
-      const response = await apiClient.get(`/posts/${invalidId}`);
-      expect(response.status()).toBe(404);
-    });
+          test('GET /posts/{id} — non-existent', async () => {
+        const invalidId = PostModel.generateNonExistentPostId();
+        const response = await apiClient.get(`/posts/${invalidId}`);
+        expect(response.status()).toBe(HTTP_STATUS.NOT_FOUND);
+      });
 
     test('GET /posts/{id} — invalid ID format', async () => {
       await allure.issue('API-10', 'JSONPlaceholder returns 404 instead of 400 for invalid ID format');
       const invalidFormatResponse = await apiClient.get('/posts/invalid-id');
-      expect(invalidFormatResponse.status()).toBe(400);
+      expect(invalidFormatResponse.status()).toBe(HTTP_STATUS.BAD_REQUEST);
     });
 
   });
@@ -89,25 +84,22 @@ test.describe('Posts API Tests', () => {
     test('POST /posts — create posts with valid data from external file', async () => {
       for (const postData of postsData.validPosts) {
         const response = await apiClient.post('/posts', postData);
-        const createdPost = await TestHelpers.validateResponse(
-          response, 
-          201, // POST should return 201 Created
-          schemaValidator, 
-          schemaValidator.getPostSchema()
-        );
-
-        expect(createdPost.title).toBe(postData.title);
-        expect(createdPost.body).toBe(postData.body);
-        expect(createdPost.userId).toBe(postData.userId);
+        const createdPost = await response.json();
+        expect(response.status()).toBe(HTTP_STATUS.CREATED);
+        
+        const postModel = new PostModel(createdPost);
+        const validation = postModel.validate();
+        await AllureHelpers.logModelValidationIfInvalid('PostModel', validation, createdPost);
+        expect(validation.isValid).toBe(true);
         expect(createdPost.id).toBe(101); 
       }
     });
 
     test('POST /posts — handle invalid post data from external file', async () => {
       for (const invalidPost of postsData.invalidPosts) {
-        await allure.issue('API-13', 'JSONPlaceholder allows creation with invalid post data');
+        await allure.issue('API-12', 'JSONPlaceholder allows creation with invalid post data');
         const response = await apiClient.post('/posts', invalidPost.data);
-        expect([400, 422]).toContain(response.status());
+        expect([HTTP_STATUS.BAD_REQUEST, HTTP_STATUS.UNPROCESSABLE_ENTITY]).toContain(response.status());
       }
     });
   });
@@ -116,69 +108,61 @@ test.describe('Posts API Tests', () => {
     test('PUT /posts/{id} — update existing', async () => {
       const updateData = postsData.updateData[0];
       const response = await apiClient.put(`/posts/${updateData.id}`, updateData);
-      const updatedPost = await TestHelpers.validateResponse(
-        response, 
-        200, 
-        schemaValidator, 
-        schemaValidator.getPostSchema()
-      );
-
-      expect(updatedPost.id).toBe(updateData.id);
-      expect(updatedPost.title).toBe(updateData.title);
-      expect(updatedPost.body).toBe(updateData.body);
-      expect(updatedPost.userId).toBe(updateData.userId);
+      const updatedPost = await response.json();
+      expect(response.status()).toBe(HTTP_STATUS.OK);
+      
+      const postModel = new PostModel(updatedPost);
+      const validation = postModel.validate();
+      await AllureHelpers.logModelValidationIfInvalid('PostModel', validation, updatedPost);
+      expect(validation.isValid).toBe(true);
     });
 
     test('PUT /posts/{id} — non-existent', async () => {
-      const invalidId = TestHelpers.getNonExistentId();
+      const invalidId = PostModel.generateNonExistentPostId();
       const updateData = { ...postsData.updateData[0], id: invalidId };
       await allure.issue('API-1', 'JSONPlaceholder returns 200 instead of 404 for non-existent resource');
       const response = await apiClient.put(`/posts/${invalidId}`, updateData);
-      expect(response.status()).toBe(404);
+      expect(response.status()).toBe(HTTP_STATUS.NOT_FOUND);
     });
   });
 
   test.describe('PATCH /posts - Partial Update Tests', () => {
     test('PATCH /posts/{id} — partial update with valid data', async () => {
       const postId = 1;
-      const patchData = { title: 'Partially Updated Title' };
+      const patchData = PostModel.generatePartialUpdate();
       
       const response = await apiClient.patch(`/posts/${postId}`, patchData);
-      const updatedPost = await TestHelpers.validateResponse(response, 200);
-
-      expect(updatedPost.id).toBe(postId);
-      expect(updatedPost.title).toBe(patchData.title);
+      const updatedPost = await response.json();
+      expect(response.status()).toBe(HTTP_STATUS.OK);
+      
+      const postModel = new PostModel(updatedPost);
+      const validation = postModel.validate();
+      await AllureHelpers.logModelValidationIfInvalid('PostModel', validation, updatedPost);
+      expect(validation.isValid).toBe(true);
     });
   });
 
   test.describe('DELETE /posts - Delete Tests', () => {
     test('DELETE /posts/{id} — delete existing', async () => {
-      const postId = TestHelpers.getRandomId(1, 100);
+      const postId = PostModel.generateRandomPostId();
       const response = await apiClient.delete(`/posts/${postId}`);
       
       await allure.issue('API-4', 'JSONPlaceholder returns 200 instead of 204 for successful deletion');
       // DELETE should return 204 No Content for successful deletion
-      expect(response.status()).toBe(204);
+      expect(response.status()).toBe(HTTP_STATUS.NO_CONTENT);
     });
 
     test('DELETE /posts/{id} — non-existent', async () => {
-      const invalidId = TestHelpers.getNonExistentId();
+      const invalidId = PostModel.generateNonExistentPostId();
       const response = await apiClient.delete(`/posts/${invalidId}`);
       
-      expect(response.status()).toBe(200);
+      expect(response.status()).toBe(HTTP_STATUS.OK);
     });
   });
 
   test.describe('Edge Cases', () => {
     test('POST /posts — malformed JSON', async () => {
-      const malformedData = [
-        'invalid-json-string',
-        '{"incomplete": json',
-        null,
-        undefined
-      ];
-
-      for (const data of malformedData) {
+      for (const data of PostModel.MALFORMED_JSON_DATA) {
         try {
           const response = await apiClient.context.post('/posts', {
             data: data,
@@ -186,7 +170,7 @@ test.describe('Posts API Tests', () => {
           });
           
           await allure.issue('API-5', 'JSONPlaceholder should return 400 for malformed JSON');
-          expect(response.status()).toBe(400);
+          expect(response.status()).toBe(HTTP_STATUS.BAD_REQUEST);
         } catch (error) {
           expect(error).toBeDefined();
         }
@@ -207,7 +191,7 @@ test.describe('Posts API Tests', () => {
         });
 
         await allure.issue('API-3', 'JSONPlaceholder should return 415 for missing/incorrect Content-Type');
-        expect(response.status()).toBe(415);
+        expect(response.status()).toBe(HTTP_STATUS.UNSUPPORTED_MEDIA_TYPE);
       }
     });
 
@@ -224,7 +208,7 @@ test.describe('Posts API Tests', () => {
           });
           
           await allure.issue('API-6', 'JSONPlaceholder should return 405 for unsupported methods');
-          expect(response.status()).toBe(405);
+          expect(response.status()).toBe(HTTP_STATUS.METHOD_NOT_ALLOWED);
         } catch (error) {
           expect(error).toBeDefined();
         }
@@ -232,26 +216,21 @@ test.describe('Posts API Tests', () => {
     });
 
     test('POST /posts — extremely large payloads', async () => {
-      const largePayload = {
-        title: 'A'.repeat(10000),
-        body: 'B'.repeat(50000),
-        userId: 1
-      };
+      const largePayloadModel = PostModel.generateLargePayload();
+      const largePayload = largePayloadModel.toJson();
 
       const response = await apiClient.post('/posts', largePayload);
       await allure.issue('API-9', 'JSONPlaceholder should return 413 for large payloads');
-      expect(response.status()).toBe(413); // Payload Too Large
+      expect(response.status()).toBe(HTTP_STATUS.PAYLOAD_TOO_LARGE);
     });
 
     test('POST /posts — special characters in data', async () => {
-      const specialCharacterData = {
-        title: '🚀 Test with émojis & spëcial çhars',
-        body: 'Body with special chars: <script>alert("test")</script> & symbols: ©®™',
-        userId: 1
-      };
+      const specialCharModel = PostModel.generateWithSpecialCharacters();
+      const specialCharacterData = specialCharModel.toJson();
+      
       await allure.issue('API-11', 'JSONPlaceholder allows creation with invalid special characters');
       const response = await apiClient.post('/posts', specialCharacterData);
-      expect([400, 422]).toContain(response.status());
+      expect([HTTP_STATUS.BAD_REQUEST, HTTP_STATUS.UNPROCESSABLE_ENTITY]).toContain(response.status());
     });
 
   });

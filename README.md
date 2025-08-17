@@ -36,11 +36,20 @@ npx playwright test tests/api/<test-file>.spec.js
 
 ### Generating Reports
 
-Generate Allure report:
+#### Allure Report Features
+
+**Automatic HTTP Request/Response Logging:**
+- Every API request and response is automatically logged in Allure reports
+- Each test step includes detailed request and response attachments
+
+**Viewing Reports:**
 ```bash
+# Generate report
 npm run report:generate
+
+# Open report in browser
+allure open 
 ```
-- The Allure report is generated from the results in the `allure-results` folder. Console output is always available during test execution via the `line` reporter.
 
 ## Test Data Structure
 
@@ -66,8 +75,8 @@ Located in `test-data/` directory:
 
 ### Dynamic Test Data
 - Generated using @faker-js/faker library (v8.3.1)
-- Helpers in `utils/test-helpers.js`
-- Supports various data patterns and edge cases
+- Supports various data patterns and edge cases for comprehensive testing
+- Used for generating random test data when needed
 
 ## Limitations and Known Issues
 
@@ -148,13 +157,7 @@ Located in `test-data/` directory:
      - Actual: 201 Created or 200 OK
      - Impact: Accepts data that should be rejected by validation
 
-   - API-12: JSONPlaceholder allows creation with invalid email format
-     - Affects: POST /comments with invalid email
-     - Expected: 400 Bad Request or 422 Unprocessable Entity
-     - Actual: 201 Created or 200 OK
-     - Impact: Accepts invalid email formats
-
-   - API-13: JSONPlaceholder allows creation with invalid data from external file
+   - API-12: JSONPlaceholder allows creation with invalid data from external file
      - Affects: POST /users, /posts with invalid data from test-data files
      - Expected: 400 Bad Request or 422 Unprocessable Entity
      - Actual: 201 Created or 200 OK

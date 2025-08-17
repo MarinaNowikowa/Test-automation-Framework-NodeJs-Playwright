@@ -1,19 +1,19 @@
-const { test, expect } = require('@playwright/test');
-const { allure } = require('allure-playwright');
-const ApiClient = require('../../utils/api-client');
-const SchemaValidator = require('../../utils/schema-validator');
-const TestHelpers = require('../../utils/test-helpers');
+import { test, expect } from '@playwright/test';
+import { allure } from 'allure-playwright';
+import ApiClient from '../../utils/api-client.js';
+import { CommentModel } from '../../models/index.js';
+import HTTP_STATUS from '../../utils/http-status.js';
+import { AllureHelpers } from '../../utils/allure-helpers.js';
+import { faker } from '@faker-js/faker';
 
 test.describe('Comments API Tests', () => {
   let apiClient;
-  let schemaValidator;
 
   test.beforeEach(async () => {
     await allure.suite('Comments API');
     
     apiClient = new ApiClient();
     await apiClient.init();
-    schemaValidator = new SchemaValidator();
   });
 
   test.afterEach(async () => {
@@ -23,36 +23,34 @@ test.describe('Comments API Tests', () => {
   test.describe('GET /comments - Positive Scenarios', () => {
     test('GET /comments — retrieve all', async () => {
       const response = await apiClient.get('/comments');
-      const comments = await TestHelpers.validateResponse(
-        response, 
-        200, 
-        schemaValidator, 
-        { type: 'array', items: schemaValidator.getCommentSchema() }
-      );
-
+      expect(response.status()).toBe(HTTP_STATUS.OK);
+      
+      const comments = await response.json();
       expect(comments).toHaveLength(500);
-      comments.forEach(comment => {
-        expect(comment).toHaveProperty('id');
-        expect(comment).toHaveProperty('postId');
-        expect(comment).toHaveProperty('name');
-        expect(comment).toHaveProperty('email');
-        expect(comment).toHaveProperty('body');
-      });
+      
+      for (const comment of comments) {
+        const commentModel = new CommentModel(comment);
+        const validation = commentModel.validate();
+        await AllureHelpers.logModelValidationIfInvalid('CommentModel', validation, comment);
+        expect(validation.isValid).toBe(true);
+      }
     });
 
     test('GET /posts/{id}/comments — retrieve comments for a specific post', async () => {
-      const postId = TestHelpers.getRandomId(1, 100);
+      const commentModel = CommentModel.generate();
+      const postId = commentModel.postId;
+      
       const response = await apiClient.get(`/posts/${postId}/comments`);
-      const comments = await TestHelpers.validateResponse(
-        response, 
-        200, 
-        schemaValidator, 
-        { type: 'array', items: schemaValidator.getCommentSchema() }
-      );
-
-      comments.forEach(comment => {
+      expect(response.status()).toBe(HTTP_STATUS.OK);
+      
+      const comments = await response.json();
+      for (const comment of comments) {
         expect(comment.postId).toBe(postId);
-      });
+        const commentModel = new CommentModel(comment);
+        const validation = commentModel.validate();
+        await AllureHelpers.logModelValidationIfInvalid('CommentModel', validation, comment);
+        expect(validation.isValid).toBe(true);
+      }
     });
 
     test('GET /comments — validate email formats', async () => {
@@ -65,147 +63,127 @@ test.describe('Comments API Tests', () => {
     });
 
     test('GET /comments?postId={postId} — retrieve comments by postId query parameter', async () => {
-      const postId = TestHelpers.getRandomId(1, 100);
+      const commentModel = CommentModel.generate();
+      const postId = commentModel.postId;
+      
       const response = await apiClient.get(`/comments?postId=${postId}`);
-      const comments = await TestHelpers.validateResponse(
-        response, 
-        200, 
-        schemaValidator, 
-        { type: 'array', items: schemaValidator.getCommentSchema() }
-      );
-
-      comments.forEach(comment => {
+      expect(response.status()).toBe(HTTP_STATUS.OK);
+      
+      const comments = await response.json();
+      for (const comment of comments) {
         expect(comment.postId).toBe(postId);
-      });
+        const commentModel = new CommentModel(comment);
+        const validation = commentModel.validate();
+        await AllureHelpers.logModelValidationIfInvalid('CommentModel', validation, comment);
+        expect(validation.isValid).toBe(true);
+      }
     });
   });
 
   test.describe('GET /comments - Negative Scenarios', () => {
     test('GET /comments/{id} — non-existent', async () => {
-      const invalidId = TestHelpers.getNonExistentId();
+      const invalidId = CommentModel.generateNonExistentCommentId();
       const response = await apiClient.get(`/comments/${invalidId}`);
-      expect(response.status()).toBe(404);
+      expect(response.status()).toBe(HTTP_STATUS.NOT_FOUND);
     });
 
     test('GET /comments/{id} — invalid ID format', async () => {
       await allure.issue('API-10', 'JSONPlaceholder returns 404 instead of 400 for invalid ID format');
       const response = await apiClient.get('/comments/invalid-id');
-      expect(response.status()).toBe(400);
+      expect(response.status()).toBe(HTTP_STATUS.BAD_REQUEST);
     });
   });
 
   test.describe('POST /comments - Create Tests', () => {
     test('POST /comments — create comment with valid data', async () => {
-      const commentData = TestHelpers.generateRandomComment(1);
+      const commentModel = CommentModel.generate(1);
+      const commentData = commentModel.toJson();
+      
       const response = await apiClient.post('/comments', commentData);
-      const createdComment = await TestHelpers.validateResponse(
-        response, 
-        201, // POST should return 201 Created
-        schemaValidator, 
-        schemaValidator.getCommentSchema()
-      );
-
-      expect(createdComment.name).toBe(commentData.name);
-      expect(createdComment.email).toBe(commentData.email);
-      expect(createdComment.body).toBe(commentData.body);
-      expect(createdComment.postId).toBe(commentData.postId);
-      expect(createdComment.id).toBe(501); // JSONPlaceholder returns 501 for new comments
+      const createdComment = await response.json();
+      expect(response.status()).toBe(HTTP_STATUS.CREATED);
+      
+      const createdCommentModel = new CommentModel(createdComment);
+      const validation = createdCommentModel.validate();
+      await AllureHelpers.logModelValidationIfInvalid('CommentModel', validation, createdComment);
+      expect(validation.isValid).toBe(true);
     });
 
     test('POST /comments — validate email format in comment data', async () => {
-      const invalidEmails = TestHelpers.generateInvalidData('comment').invalidEmails;
-      for (const invalidEmail of invalidEmails) {
-        const commentData = TestHelpers.generateRandomComment(1);
-        commentData.email = invalidEmail;
-        await allure.issue('API-12', 'JSONPlaceholder allows creation with invalid email format');
-        const response = await apiClient.post('/comments', commentData);
-        expect([400, 422]).toContain(response.status());
-      }
+      const invalidEmailComment = CommentModel.generateWithInvalidEmail();
+      const commentData = invalidEmailComment.toJson();
+      const response = await apiClient.post('/comments', commentData);
+      expect(response.status()).toBe(HTTP_STATUS.BAD_REQUEST);
     });
   });
 
   test.describe('PUT /comments - Update Tests', () => {
     test('PUT /comments/{id} — update existing', async () => {
-      const commentId = TestHelpers.getRandomId(1, 500);
-      const updateData = TestHelpers.generateRandomComment(1);
+      const commentId = CommentModel.generateRandomCommentId();
+      const commentModel = CommentModel.generate(1);
+      const updateData = commentModel.toJson();
       updateData.id = commentId;
       
       const response = await apiClient.put(`/comments/${commentId}`, updateData);
-      const updatedComment = await TestHelpers.validateResponse(
-        response, 
-        200, 
-        schemaValidator, 
-        schemaValidator.getCommentSchema()
-      );
-
-      expect(updatedComment.id).toBe(commentId);
-      expect(updatedComment.name).toBe(updateData.name);
-      expect(updatedComment.email).toBe(updateData.email);
-      expect(updatedComment.body).toBe(updateData.body);
-      expect(updatedComment.postId).toBe(updateData.postId);
+      const updatedComment = await response.json();
+      expect(response.status()).toBe(HTTP_STATUS.OK);
+      
+      const updatedCommentModel = new CommentModel(updatedComment);
+      const validation = updatedCommentModel.validate();
+      await AllureHelpers.logModelValidationIfInvalid('CommentModel', validation, updatedComment);
+      expect(validation.isValid).toBe(true);
     });
 
     test('PUT /comments/{id} — non-existent', async () => {
-      const invalidId = TestHelpers.getNonExistentId();
-      const updateData = TestHelpers.generateRandomComment(1);
+      const invalidId = CommentModel.generateNonExistentCommentId();
+      const commentModel = CommentModel.generate(1);
+      const updateData = commentModel.toJson();
       updateData.id = invalidId;
       
       await allure.issue('API-1', 'JSONPlaceholder returns 200 instead of 404 for non-existent resource');
       const response = await apiClient.put(`/comments/${invalidId}`, updateData);
-      expect(response.status()).toBe(404);
+      expect(response.status()).toBe(HTTP_STATUS.NOT_FOUND);
     });
   });
 
   test.describe('PATCH /comments - Partial Update Tests', () => {
     test('PATCH /comments/{id} — partial update with valid data', async () => {
-      const commentId = TestHelpers.getRandomId(1, 500);
-      const patchData = TestHelpers.generatePartialUpdate('comment');
+      const commentId = CommentModel.generateRandomCommentId();
+      const patchData = {
+        name: faker.lorem.words(2),
+        body: faker.lorem.sentence()
+      };
       
       const response = await apiClient.patch(`/comments/${commentId}`, patchData);
-      const updatedComment = await TestHelpers.validateResponse(
-        response, 
-        200, 
-        schemaValidator, 
-        schemaValidator.getCommentSchema()
-      );
-
-      expect(updatedComment.id).toBe(commentId);
-      expect(updatedComment.name).toBe(patchData.name);
-      expect(updatedComment.body).toBe(patchData.body);
+      const updatedComment = await response.json();
+      expect(response.status()).toBe(HTTP_STATUS.OK);
+      
+      const updatedCommentModel = new CommentModel(updatedComment);
+      const validation = updatedCommentModel.validate();
+      await AllureHelpers.logModelValidationIfInvalid('CommentModel', validation, updatedComment);
+      expect(validation.isValid).toBe(true);
     });
   });
 
   test.describe('DELETE /comments - Delete Tests', () => {
     test('DELETE /comments/{id} — delete existing', async () => {
-      const commentId = TestHelpers.getRandomId(1, 500);
+      const commentId = CommentModel.generateRandomCommentId();
       const response = await apiClient.delete(`/comments/${commentId}`);
       await allure.issue('API-4', 'JSONPlaceholder returns 200 instead of 204 for successful deletion');
-      expect(response.status()).toBe(204);
+      expect(response.status()).toBe(HTTP_STATUS.NO_CONTENT);
     });
 
     test('DELETE /comments/{id} — non-existent', async () => {
-      const invalidId = TestHelpers.getNonExistentId();
+      const invalidId = CommentModel.generateNonExistentCommentId();
       await allure.issue('API-2', 'JSONPlaceholder returns 200 instead of 404 for deleting non-existent resource');
       const response = await apiClient.delete(`/comments/${invalidId}`);
-      expect(response.status()).toBe(404);
+      expect(response.status()).toBe(HTTP_STATUS.NOT_FOUND);
     });
   });
 
   test.describe('Edge Cases', () => {
     test('POST /comments — malformed JSON', async () => {
-      const invalidData = TestHelpers.generateInvalidData('comment');
-      const malformedData = [
-        invalidData.emptyObject,
-        invalidData.nullValues,
-        invalidData.wrongTypes,
-        invalidData.missingFields,
-        'invalid-json-string',
-        '{"incomplete": json',
-        null,
-        undefined
-      ];
-
-      for (const data of malformedData) {
+      for (const data of CommentModel.MALFORMED_JSON_DATA) {
         try {
           const response = await apiClient.context.post('/comments', {
             data: data,
@@ -213,7 +191,7 @@ test.describe('Comments API Tests', () => {
           });
           
           await allure.issue('API-5', 'JSONPlaceholder should return 400 for malformed JSON');
-          expect(response.status()).toBe(400);
+          expect(response.status()).toBe(HTTP_STATUS.BAD_REQUEST);
         } catch (error) {
           expect(error).toBeDefined();
         }
@@ -221,20 +199,17 @@ test.describe('Comments API Tests', () => {
     });
 
     test('POST /comments — invalid Content-Type headers', async () => {
-      const validData = TestHelpers.generateRandomComment(1);
-      const contentTypeTests = [
-        { contentType: undefined, description: 'missing Content-Type' },
-        { contentType: 'text/plain', description: 'incorrect Content-Type' }
-      ];
+      const commentModel = CommentModel.generate(1);
+      const validData = commentModel.toJson();
 
-      for (const test of contentTypeTests) {
+      for (const test of CommentModel.INVALID_CONTENT_TYPE_TESTS) {
         const response = await apiClient.context.post('/comments', {
           data: JSON.stringify(validData),
           headers: test.contentType ? { 'Content-Type': test.contentType } : {}
         });
 
         await allure.issue('API-3', 'JSONPlaceholder should return 415 for missing/incorrect Content-Type');
-        expect(response.status()).toBe(415);
+        expect(response.status()).toBe(HTTP_STATUS.UNSUPPORTED_MEDIA_TYPE);
       }
     });
 
@@ -251,7 +226,7 @@ test.describe('Comments API Tests', () => {
           });
           
           await allure.issue('API-6', 'JSONPlaceholder should return 405 for unsupported methods');
-          expect(response.status()).toBe(405);
+          expect(response.status()).toBe(HTTP_STATUS.METHOD_NOT_ALLOWED);
         } catch (error) {
           expect(error).toBeDefined();
         }
@@ -259,23 +234,21 @@ test.describe('Comments API Tests', () => {
     });
 
     test('POST /comments — extremely large payloads', async () => {
-      const largePayload = {
-        postId: 1,
-        name: 'A'.repeat(10000),
-        email: `test@${'b'.repeat(5000)}.com`,
-        body: 'C'.repeat(50000)
-      };
+      const largePayloadComment = CommentModel.generateLargePayload();
+      const largePayload = largePayloadComment.toJson();
 
       const response = await apiClient.post('/comments', largePayload);
       await allure.issue('API-9', 'JSONPlaceholder should return 413 for large payloads');
-      expect(response.status()).toBe(413); // Payload Too Large
+      expect(response.status()).toBe(HTTP_STATUS.PAYLOAD_TOO_LARGE);
     });
 
     test('POST /comments — special characters in comment data', async () => {
-      const specialCharData = TestHelpers.generateInvalidData('comment').specialCharacters;
-      await allure.issue('API-11', 'JSONPlaceholder allows creation with invalid special characters');
+      const specialCharComment = CommentModel.generateWithSpecialCharacters();
+      const specialCharData = specialCharComment.toJson();
+      
       const response = await apiClient.post('/comments', specialCharData);
-      expect([400, 422]).toContain(response.status());
+      await allure.issue('API-11', 'JSONPlaceholder allows creation with special characters');
+      expect(response.status()).toBe(HTTP_STATUS.BAD_REQUEST);
     });
   });
 });
